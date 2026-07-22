@@ -2,7 +2,6 @@ from PIL import Image
 import easyocr
 import numpy as np
 
-# Load EasyOCR model once
 reader = easyocr.Reader(['en'], gpu=False)
 
 def extract_text(image):
