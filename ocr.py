@@ -1,11 +1,11 @@
-from paddleocr import PaddleOCR
-from PIL import Image
+import easyocr
 import numpy as np
+from PIL import Image
 
 
-ocr = PaddleOCR(
-    use_angle_cls=True,
-    lang="en"
+reader = easyocr.Reader(
+    ['en'],
+    gpu=False
 )
 
 
@@ -14,20 +14,9 @@ def extract_text(image):
     if isinstance(image, Image.Image):
         image = np.array(image)
 
-
-    result = ocr.ocr(
+    result = reader.readtext(
         image,
-        cls=True
+        detail=0
     )
 
-
-    text = ""
-
-    for line in result:
-
-        for item in line:
-
-            text += item[1][0] + "\n"
-
-
-    return text
+    return "\n".join(result)
