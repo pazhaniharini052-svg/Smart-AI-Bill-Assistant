@@ -1,12 +1,6 @@
-import easyocr
+import pytesseract
 import numpy as np
 from PIL import Image
-
-
-reader = easyocr.Reader(
-    ['en'],
-    gpu=False
-)
 
 
 def extract_text(image):
@@ -14,9 +8,8 @@ def extract_text(image):
     if isinstance(image, Image.Image):
         image = np.array(image)
 
-    result = reader.readtext(
-        image,
-        detail=0
+    text = pytesseract.image_to_string(
+        image
     )
 
-    return "\n".join(result)
+    return text
