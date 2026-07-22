@@ -143,15 +143,10 @@ else:
 
             if uploaded_file.type == "application/pdf":
 
+                 pages = convert_from_bytes(uploaded_file.getvalue())
 
-                pages = convert_from_bytes(
-                    uploaded_file.getvalue(),
-                    poppler_path=r"C:\Users\pazha\Downloads\Release-26.02.0-0\poppler-26.02.0\Library\bin"
-                )
-
-
-                image = pages[0]
-
+                 image = pages[0]
+                
 
             else:
 
