@@ -2,13 +2,20 @@ import os
 import json
 import streamlit as st
 from dotenv import load_dotenv
-from google import genai
+
 from PIL import Image
 from pdf2image import convert_from_bytes
 
 from database import Session, Bill
 from chat import ask_bill_assistant
 from view_bills import show_bills
+
+from ocr import extract_text
+from groq_ai import extract_bill_details
+from dashboard import show_dashboard
+
+
+load_dotenv()
 
 
 # ---------------- PAGE CONFIG ----------------
@@ -30,23 +37,11 @@ os.makedirs(
 )
 
 
-# ---------------- GEMINI ----------------
-
-load_dotenv()
-
-client = genai.Client(
-    api_key=os.getenv("GOOGLE_API_KEY")
-)
-
-
-
 # ---------------- SESSION ----------------
-
-if "messages" not in st.session_state:
-    st.session_state.messages = []
 
 if "uploaded_image" not in st.session_state:
     st.session_state.uploaded_image = None
+
 
 if "file_path" not in st.session_state:
     st.session_state.file_path = None
@@ -59,6 +54,7 @@ page = st.sidebar.radio(
     "Navigation",
     [
         "Upload Bill",
+        "Dashboard",
         "My Bills"
     ]
 )
@@ -66,10 +62,20 @@ page = st.sidebar.radio(
 
 
 # ==================================================
+# DASHBOARD
+# ==================================================
+
+if page == "Dashboard":
+
+    show_dashboard()
+
+
+
+# ==================================================
 # MY BILLS
 # ==================================================
 
-if page == "My Bills":
+elif page == "My Bills":
 
     show_bills()
 
@@ -82,7 +88,7 @@ if page == "My Bills":
 else:
 
 
-    left, right = st.columns([3,1])
+    left, right = st.columns([3, 1])
 
 
     with left:
@@ -94,129 +100,74 @@ else:
 
 
         st.write(
-            "Upload or capture a bill and extract details using Gemini AI."
+            "Upload a bill image or PDF and extract details using AI."
         )
-
-
-
-        tab1, tab2 = st.tabs(
-            [
-                "📁 Upload Bill",
-                "📷 Camera"
-            ]
-        )
-
 
 
         # ---------------- UPLOAD ----------------
 
 
-        with tab1:
+        uploaded_file = st.file_uploader(
+            "Choose Bill",
+            type=[
+                "png",
+                "jpg",
+                "jpeg",
+                "pdf"
+            ]
+        )
 
 
-            uploaded_file = st.file_uploader(
-                "Choose Bill",
-                type=[
-                    "png",
-                    "jpg",
-                    "jpeg",
-                    "pdf"
-                ]
+        if uploaded_file:
+
+
+            save_path = os.path.join(
+                UPLOAD_FOLDER,
+                uploaded_file.name
             )
 
 
-            if uploaded_file:
+            with open(
+                save_path,
+                "wb"
+            ) as f:
 
-
-                save_path = os.path.join(
-                    UPLOAD_FOLDER,
-                    uploaded_file.name
+                f.write(
+                    uploaded_file.getbuffer()
                 )
 
 
-                with open(
-                    save_path,
-                    "wb"
-                ) as f:
-
-                    f.write(
-                        uploaded_file.getbuffer()
-                    )
-
-
-                st.session_state.file_path = save_path
+            st.session_state.file_path = save_path
 
 
 
-                if uploaded_file.type == "application/pdf":
+            if uploaded_file.type == "application/pdf":
 
 
-                    pages = convert_from_bytes(
-                        uploaded_file.getvalue(),
-                        poppler_path=r"C:\Users\pazha\Downloads\Release-26.02.0-0\poppler-26.02.0\Library\bin"
-                    )
-
-
-                    image = pages[0]
-
-
-                else:
-
-                    image = Image.open(
-                        uploaded_file
-                    )
-
-
-
-                st.session_state.uploaded_image = image
-
-
-                st.success(
-                    "✅ Bill Uploaded Successfully"
+                pages = convert_from_bytes(
+                    uploaded_file.getvalue(),
+                    poppler_path=r"C:\Users\pazha\Downloads\Release-26.02.0-0\poppler-26.02.0\Library\bin"
                 )
 
 
+                image = pages[0]
 
 
-        # ---------------- CAMERA ----------------
-
-
-        with tab2:
-
-
-            camera = st.camera_input(
-                "Capture Bill"
-            )
-
-
-            if camera:
+            else:
 
 
                 image = Image.open(
-                    camera
+                    uploaded_file
                 )
 
 
-                path = os.path.join(
-                    UPLOAD_FOLDER,
-                    "camera_bill.jpg"
-                )
+
+            st.session_state.uploaded_image = image
 
 
-                image.save(
-                    path
-                )
-
-
-                st.session_state.uploaded_image = image
-
-                st.session_state.file_path = path
-
-
-                st.success(
-                    "✅ Bill Captured"
-                )
-
+            st.success(
+                "✅ Bill Uploaded Successfully"
+            )
 
 
 
@@ -240,96 +191,43 @@ else:
 
         else:
 
+
             extract = False
-
-
-
-
-        # ---------------- GEMINI ----------------
-
+                    # ---------------- OCR + GROQ ----------------
 
         if extract:
 
-
             try:
+
+                with st.spinner(
+                    "Reading bill text..."
+                ):
+
+                    bill_text = extract_text(
+                        st.session_state.uploaded_image
+                    )
+
+
+                st.subheader(
+                    "📄 Extracted Text"
+                )
+
+
+                st.text_area(
+                    "OCR Output",
+                    bill_text,
+                    height=200
+                )
 
 
                 with st.spinner(
-                    "Extracting Bill Details..."
+                    "Extracting bill details..."
                 ):
 
 
-                    response = client.models.generate_content(
-
-
-                        model="gemini-3.5-flash",
-
-
-                        contents=[
-
-
-                            st.session_state.uploaded_image,
-
-
-                            """
-                            Extract bill details.
-
-                            Return ONLY valid JSON.
-
-                            Do not use markdown.
-                            Do not add explanation.
-
-                            Format:
-
-                            {
-                            "store_name":"",
-                            "date":"",
-                            "invoice_number":"",
-                            "total_amount":"",
-                            "gst":"",
-                            "items":[
-                                {
-                                "name":"",
-                                "quantity":"",
-                                "rate":"",
-                                "amount":""
-                                }
-                            ]
-                            }
-
-                            """
-                        ],
-
-
-                        config={
-                            "response_mime_type":
-                            "application/json"
-                        }
-
+                    data = extract_bill_details(
+                        bill_text
                     )
-
-
-
-                result = response.text.strip()
-
-
-
-                if result.startswith("```"):
-
-                    result = result.replace(
-                        "```json",
-                        ""
-                    )
-
-                    result = result.replace(
-                        "```",
-                        ""
-                    )
-
-
-                data = json.loads(
-                    result.strip()
-                )
 
 
 
@@ -339,7 +237,7 @@ else:
 
 
 
-                # -------- DETAILS --------
+                # ---------------- STORE DETAILS ----------------
 
 
                 st.subheader(
@@ -366,7 +264,7 @@ else:
 
 
                 st.write(
-                    "Total:",
+                    "Total Amount:",
                     f"₹ {data.get('total_amount')}"
                 )
 
@@ -378,7 +276,7 @@ else:
 
 
 
-                # -------- ITEMS --------
+                # ---------------- ITEMS ----------------
 
 
                 st.subheader(
@@ -386,8 +284,8 @@ else:
                 )
 
 
-                for index,item in enumerate(
-                    data.get("items",[]),
+                for index, item in enumerate(
+                    data.get("items", []),
                     start=1
                 ):
 
@@ -397,7 +295,7 @@ else:
                     )
 
 
-                    c1,c2,c3 = st.columns(3)
+                    c1, c2, c3 = st.columns(3)
 
 
                     with c1:
@@ -433,15 +331,15 @@ else:
                         )
 
 
+
                 st.divider()
 
 
 
-                # -------- SAVE --------
+                # ---------------- SAVE BILL ----------------
 
 
                 session = Session()
-
 
 
                 bill = Bill(
@@ -450,9 +348,11 @@ else:
                         "store_name"
                     ),
 
+
                     date=data.get(
                         "date"
                     ),
+
 
                     invoice_number=data.get(
                         "invoice_number"
@@ -461,20 +361,29 @@ else:
 
                     total_amount=float(
                         str(
-                            data.get("total_amount",0)
-                        ).replace(",","")
+                            data.get(
+                                "total_amount",
+                                0
+                            )
+                        ).replace(",", "")
                     ),
 
 
                     gst=float(
                         str(
-                            data.get("gst",0)
-                        ).replace(",","")
+                            data.get(
+                                "gst",
+                                0
+                            )
+                        ).replace(",", "")
                     ),
 
 
                     items=json.dumps(
-                        data.get("items")
+                        data.get(
+                            "items",
+                            []
+                        )
                     ),
 
 
@@ -483,12 +392,13 @@ else:
                 )
 
 
-
                 session.add(
                     bill
                 )
 
+
                 session.commit()
+
 
                 session.close()
 
@@ -498,7 +408,8 @@ else:
                     "💾 Bill Saved Successfully"
                 )
 
-                st.balloons()
+
+                
 
 
 
@@ -509,12 +420,16 @@ else:
                     "❌ Failed to extract bill"
                 )
 
+
                 st.exception(e)
 
 
 
 
-    # ---------------- CHAT ----------------
+
+    # ==================================================
+    # CHAT ASSISTANT
+    # ==================================================
 
 
     with right:
