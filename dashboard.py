@@ -1,6 +1,11 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
+
+try:
+    import plotly.express as px
+except ImportError:
+    st.error("plotly library is required. Install it using: pip install plotly")
+    px = None
 
 from database import Session, Bill
 

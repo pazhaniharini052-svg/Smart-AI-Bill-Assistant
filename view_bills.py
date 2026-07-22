@@ -1,6 +1,7 @@
 import os
 import json
 import streamlit as st
+
 from database import Session, Bill
 
 
@@ -11,12 +12,15 @@ def show_bills():
     session = Session()
 
     try:
+
         bills = session.query(Bill).all()
 
     except Exception as e:
+
         st.error(f"Database error: {e}")
         session.close()
         return
+
 
 
     if not bills:
@@ -29,7 +33,9 @@ def show_bills():
 
     for bill in bills:
 
+
         total = float(bill.total_amount or 0)
+
 
         with st.expander(
             f"🧾 {bill.store_name} | ₹{total:.2f}"
@@ -50,6 +56,7 @@ def show_bills():
 
             gst = float(bill.gst or 0)
 
+
             st.write(
                 "💰 GST:",
                 f"₹ {gst:.2f}"
@@ -57,7 +64,7 @@ def show_bills():
 
 
 
-            # -------- ITEMS DISPLAY --------
+            # ================= ITEMS =================
 
 
             st.subheader(
@@ -77,56 +84,42 @@ def show_bills():
                     start=1
                 ):
 
-
                     st.markdown(
                         f"### {i}. {item.get('name')}"
                     )
 
 
-                    col1, col2, col3 = st.columns(3)
+                    c1, c2, c3 = st.columns(3)
 
 
+                    with c1:
 
-                    with col1:
-
-                        st.write(
-                            "Quantity"
-                        )
+                        st.write("Quantity")
 
                         st.info(
                             item.get("quantity")
                         )
 
 
+                    with c2:
 
-                    with col2:
-
-                        st.write(
-                            "Rate"
-                        )
+                        st.write("Rate")
 
                         st.info(
                             f"₹ {float(item.get('rate',0)):.2f}"
                         )
 
 
+                    with c3:
 
-                    with col3:
-
-                        st.write(
-                            "Amount"
-                        )
+                        st.write("Amount")
 
                         st.success(
                             f"₹ {float(item.get('amount',0)):.2f}"
                         )
 
 
-                    st.divider()
-
-
-
-            except Exception:
+            except:
 
                 st.write(
                     bill.items
@@ -134,7 +127,11 @@ def show_bills():
 
 
 
-            # -------- BILL COPY --------
+            st.divider()
+
+
+
+            # ================= BILL FILE =================
 
 
             st.subheader(
@@ -145,9 +142,16 @@ def show_bills():
             if bill.file_path:
 
 
-                if os.path.exists(
-                    bill.file_path
-                ):
+                file_path = bill.file_path
+
+
+                st.write(
+                    "File:",
+                    file_path
+                )
+
+
+                if os.path.exists(file_path):
 
 
                     st.success(
@@ -155,57 +159,90 @@ def show_bills():
                     )
 
 
-                    # IMAGE
+                    file_name = os.path.basename(
+                        file_path
+                    )
 
-                    if bill.file_path.lower().endswith(
+
+                    # -------- IMAGE --------
+
+
+                    if file_path.lower().endswith(
                         (".png",".jpg",".jpeg")
                     ):
 
 
                         st.image(
-                            bill.file_path,
+                            file_path,
                             width=400
                         )
 
 
-
-                    # PDF
-
-                    elif bill.file_path.lower().endswith(
-                        ".pdf"
-                    ):
-
-
                         with open(
-                            bill.file_path,
+                            file_path,
                             "rb"
                         ) as file:
 
 
                             st.download_button(
 
-                                label="📄 View / Download PDF",
+                                label="⬇️ Download Image",
 
                                 data=file,
 
-                                file_name=os.path.basename(
-                                    bill.file_path
-                                ),
+                                file_name=file_name,
+
+                                mime="image/jpeg"
+
+                            )
+
+
+
+                    # -------- PDF --------
+
+
+                    elif file_path.lower().endswith(
+                        ".pdf"
+                    ):
+
+
+                        with open(
+                            file_path,
+                            "rb"
+                        ) as file:
+
+
+                            st.download_button(
+
+                                label="⬇️ Download PDF",
+
+                                data=file,
+
+                                file_name=file_name,
 
                                 mime="application/pdf"
 
                             )
 
 
+                    else:
+
+                        st.warning(
+                            "Unsupported file type"
+                        )
+
+
+
                 else:
 
-                    st.warning(
-                        "⚠️ Bill file not found"
+
+                    st.error(
+                        "❌ File missing from uploads folder"
                     )
 
 
-
             else:
+
 
                 st.info(
                     "No bill copy available"
@@ -213,10 +250,11 @@ def show_bills():
 
 
 
-            # -------- DELETE BILL --------
-
-
             st.divider()
+
+
+
+            # ================= DELETE =================
 
 
             if st.button(
@@ -224,8 +262,6 @@ def show_bills():
                 key=f"delete_{bill.id}"
             ):
 
-
-                # Delete uploaded file
 
                 if bill.file_path and os.path.exists(
                     bill.file_path
@@ -236,12 +272,10 @@ def show_bills():
                     )
 
 
-
-                # Delete database record
-
                 session.delete(
                     bill
                 )
+
 
                 session.commit()
 

@@ -30,12 +30,7 @@ st.set_page_config(
 # ---------------- UPLOAD FOLDER ----------------
 
 UPLOAD_FOLDER = "uploads"
-
-os.makedirs(
-    UPLOAD_FOLDER,
-    exist_ok=True
-)
-
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 # ---------------- SESSION ----------------
 
@@ -137,7 +132,7 @@ else:
                 )
 
 
-            st.session_state.file_path = save_path
+            st.session_state.file_path = os.path.abspath(save_path)
 
 
 
