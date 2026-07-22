@@ -1,11 +1,19 @@
+from paddleocr import PaddleOCR
 from PIL import Image
-import pytesseract
+import numpy as np
 
-# Update this path if your installation is elsewhere
-pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+ocr = PaddleOCR(use_angle_cls=True, lang="en")
 
 def extract_text(image):
-    if not isinstance(image, Image.Image):
-        image = Image.fromarray(image)
+    if isinstance(image, Image.Image):
+        image = np.array(image)
 
-    return pytesseract.image_to_string(image)
+    result = ocr.ocr(image, cls=True)
+
+    text = ""
+
+    if result and result[0]:
+        for line in result[0]:
+            text += line[1][0] + "\n"
+
+    return text
